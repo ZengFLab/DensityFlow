@@ -18,7 +18,7 @@ pip3 install DensityFlow
 ```
 
 ## Example
-Dataset used in this example is obtained from scPerturb(https://zenodo.org/records/13350497)
+Dataset used in this example is obtained from [scPerturb](https://zenodo.org/records/13350497)
 
 ```
 import re
