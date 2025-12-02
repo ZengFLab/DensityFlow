@@ -8,4 +8,4 @@ from . import perturb
 from . import dist 
 
 __all__ = ['DensityFlow', 
-           'flow', 'perturb', 'atac', 'utils', 'dist', 'codebook']
+           'flow', 'perturb', 'atac', 'utils', 'dist']

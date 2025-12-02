@@ -59,6 +59,56 @@ def set_random_seed(seed):
     pyro.set_rng_seed(seed)
 
 class DensityFlow(nn.Module):
+    """DensityFlow model
+
+    Parameters
+    ----------
+    input_size : int
+        Number of features like genes or peaks
+
+    codebook_size: int
+        Number of codebook items
+
+    cell_factor_size: int
+        Number of cell-level factors including perturbations and covariates
+
+    specific_mode: str
+        Type of specificity mode. Either 'none', 'codebook', or 'cell'. 'none' will
+        use uniform perturbation effects. 'codebook' will learn cell-state-specific
+        perturbation effects. 'cell' will learn cell-specific perturbation effects. 
+
+    z_dim : int
+        Dimensionality of latent space.
+
+    z_dist: str
+        Distribution model of latent variable. One of 'normal', 'studentt', 'laplacian',
+        'cauchy', and 'gumbel'. Default is 'studentt'.
+        
+    loss_func: str
+        Distribution model for observed profiles. One of 'negbinomial', 'poisson', 'multinomial',
+        'bernoulli'. Default is 'poisson'
+
+
+    Examples
+    --------
+    >>> from DensityFlow import DensityFlow
+    >>> from DensityFlow.perturb import LabelMatrix
+    >>> import scanpy as sc
+    >>> adata = sc.read('dataset.h5ad')
+    >>> adata.X = adata.layers['counts].copy()
+    >>> sc.pp.normalize_total(adata)
+    >>> sc.pp.log1p(adata)
+    >>> xs = adata.X 
+    >>> lb = LabelMatrix()
+    >>> us = lb.fit_transform(adata_train.obs[pert_col], control_label=control_label)
+    >>> ln = lb.labels_
+    >>> model = DensityFlow(input_size = xs.shape[1],
+                            cell_factor_size=us.shape[1],
+                            use_cuda=True)
+    >>> model.fit(xs, us=us, use_jax=True)
+    >>> zs_basal = model.get_basal_embedding(xs)
+    >>> zs_complete = model.get_complete_embedding(xs, us)
+    """
     def __init__(self,
                  input_size: int,
                  codebook_size: int = 15,
@@ -524,14 +574,12 @@ class DensityFlow(nn.Module):
 
         Parameters
         ----------
-        xs
-            Single-cell expression matrix. It should be a Numpy array or a Pytorch Tensor.
-        batch_size
-            Size of batch processing.
-        use_decoder
-            If toggled on, the latent representations will be reconstructed from the metacell codebook
-        soft_assign
-            If toggled on, the assignments of cells will use probabilistic values.
+        xs: numpy.array
+            Single-cell expression matrix. It should be a Numpy array or a Pytorch Tensor
+        batch_size: int
+            Size of batch processing
+        show_progress: bool
+            Verbose on or off
         """
         xs = self.preprocess(xs)
         xs = convert_to_tensor(xs, device=self.get_device())
@@ -674,8 +722,28 @@ class DensityFlow(nn.Module):
                              batch_size: int = 1024,
                              show_progress=True):
         """
-        Return cells' changes in the latent space induced by specific perturbation of a factor
+        Compute displacement vector induced by a perturbation.
+        
+        Parameters
+        ----------
+        xs: numpy.array
+            single-cell matrix
+            
+        perturb_idx: int
+            perturbation id
+            
+        perturb_us: numpy.array
+            perturbation information for cells
 
+        soft_assign: bool
+            use similarity to all codebook items for prediction or rely on the information
+            from the most similar codebook item.
+            
+        batch_size: int
+            size of batch processing
+            
+        show_progress: bool
+            verbose on or off
         """
         #xs = self.preprocess(xs)
         if (self.specific_mode == 'codebook'):
@@ -731,6 +799,23 @@ class DensityFlow(nn.Module):
         return counts
     
     def get_counts(self, zs, library_sizes, batch_size: int = 1024, show_progress=True):
+        '''
+        Generate observational profiles from latent states.
+        
+        Parameters
+        ----------
+        zs: numpy.array
+            latent states for cells
+            
+        library_sizes: numpy.array
+            library sizes for cells
+            
+        batch_size: int
+            size of batch processing
+            
+        show_progress: bool
+            verbose on or off
+        '''
 
         zs = convert_to_tensor(zs, device=self.get_device())
         
@@ -786,29 +871,29 @@ class DensityFlow(nn.Module):
 
         Parameters
         ----------
-        xs
+        xs: numpy.array
             Single-cell experssion matrix. It should be a Numpy array or a Pytorch Tensor. Rows are cells and columns are features.
-        us
+        us: numpy.array
             cell-level factor matrix. 
-        ys
-            Desired factor matrix. It should be a Numpy array or a Pytorch Tensor. Rows are cells and columns are desired factors.
-        num_epochs
+        num_epochs: int
             Number of training epochs.
-        learning_rate
+        learning_rate: float
             Parameter for training.
-        batch_size
+        batch_size: int
             Size of batch processing.
-        algo
+        algo: str
             Optimization algorithm.
-        beta_1
+        beta_1: float
             Parameter for optimization.
-        weight_decay
+        weight_decay: float
             Parameter for optimization.
-        decay_rate 
+        decay_rate: float
             Parameter for optimization.
-        use_jax
+        use_jax: bool
             If toggled on, Jax will be used for speeding up. CAUTION: This will raise errors because of unknown reasons when it is called in
             the Python script or Jupyter notebook. It is OK if it is used when runing DensityFlow in the shell command.
+        show_progress: bool
+            verbose on or off
         """
         xs = self.preprocess(xs, threshold=threshold)
         xs = convert_to_tensor(xs, dtype=self.dtype, device=self.get_device())

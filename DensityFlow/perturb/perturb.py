@@ -7,6 +7,27 @@ from joblib import Parallel, delayed
 from typing import Literal
 
 class LabelMatrix:
+    """
+    Construct a binary label matrix
+    
+    Parameters
+    ----------
+    labels: list
+        cells' perturbation labels
+        
+    control_label: str|None
+        label for control condition
+        
+    sep_pattern: str
+        pattern for extracting perturbation label
+        
+    Examples
+    --------
+    >>> from DensityFlow.perturb import LabelMatrix
+    >>> lb = LabelMatrix()
+    >>> labels = ['p1','p2','p3','p4','c']
+    >>> us = lb.fit_transform(labels, control_label='c')
+    """
     def __init__(self):
         self.labels_ = None
         self.control_label = None 
@@ -56,6 +77,28 @@ class LabelMatrix:
         return matrix_to_labels(matrix=matrix, unique_labels=self.labels_)
 
 class DoseMatrix:
+    """
+    Construct a dosage matrix
+    
+    Parameters
+    ----------
+    labels: list
+        cells' perturbation labels
+        
+    label_dose: list
+        cells' perturbation dose values
+        
+    sep_pattern: str
+        pattern for extracting perturbation label
+        
+    Examples
+    --------
+    >>> from DensityFlow.perturb import LabelMatrix
+    >>> lb = DoseMatrix()
+    >>> labels = ['p1','p2','p3','p4','c']
+    >>> doses = [0.1, 0.2, 0.3, 0.4, 0]
+    >>> us = lb.fit_transform(labels, doses)
+    """
     def __init__(self):
         self.labels_ = None 
         

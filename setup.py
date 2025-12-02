@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name='DensityFlow',
-    version='1.0.0',
+    version='1.0.1',
     description='Generative additive model for single cell perturbation',
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -20,7 +20,7 @@ setup(
         'Operating System :: OS Independent',
     ],
     python_requires='>=3.10',
-    url='https://github.com/ZengFLab/SURE',  # 项目的 GitHub 地址
+    url='https://github.com/ZengFLab/DensityFlow',  # 项目的 GitHub 地址
 
     entry_points={
         'console_scripts': [
