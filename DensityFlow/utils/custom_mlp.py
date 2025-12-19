@@ -241,12 +241,12 @@ class ZeroBiasMLP(nn.Module):
         mask = torch.zeros_like(y)
         if len(y.shape)==2:
             if type(x)==list:
-                mask[x[1][:,0]>0,:] = 1
+                mask[x[0][:,0]>0,:] = 1
             else:
                 mask[x[:,0]>0,:] = 1
         elif len(y.shape)==3:
             if type(x)==list:
-                mask[:,x[1][:,0]>0,:] = 1
+                mask[:,x[0][:,0]>0,:] = 1
             else:
                 mask[:,x[:,0]>0,:] = 1
         return y*mask
@@ -281,6 +281,41 @@ class ZeroBiasMLP2(nn.Module):
         mask = torch.zeros_like(y)
         x_sum = torch.sum(x, dim=1)
         mask[x_sum>0,:] = 1
+        return y*mask
+    
+    
+class ZeroBiasMLP3(nn.Module):
+    def __init__(
+        self,
+        mlp_sizes,
+        activation=nn.ReLU,
+        output_activation=None,
+        post_layer_fct=lambda layer_ix, total_layers, layer: None,
+        post_act_fct=lambda layer_ix, total_layers, layer: None,
+        allow_broadcast=False,
+        use_cuda=False,
+    ):
+        # init the module object
+        super().__init__()
+        self.mlp = MLP(mlp_sizes=mlp_sizes,
+                       activation=activation,
+                       output_activation=output_activation,
+                       post_layer_fct=post_layer_fct,
+                       post_act_fct=post_act_fct,
+                       allow_broadcast=allow_broadcast,
+                       use_cuda=use_cuda,
+                       bias=True)
+        
+    # pass through our sequential for the output!
+    def forward(self, x):
+        y = self.mlp(x)
+        mask = torch.zeros_like(y)
+        x_sum = torch.sum(x[0], dim=1)
+        if len(y.shape)==2:
+            mask[x_sum>0,:] = 1
+        elif len(y.shape)==3:
+            mask[:,x_sum>0,:] = 1
+            
         return y*mask
     
 class HDMLP(nn.Module):

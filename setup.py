@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name='DensityFlow',
-    version='1.0.1',
+    version='1.1.1',
     description='Generative additive model for single cell perturbation',
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -13,7 +13,7 @@ setup(
     author_email='zengfeng@xmu.edu.cn',
     packages=find_packages(),
     install_requires=['dill==0.3.8','scanpy','pytorch-ignite','datatable','scipy','numpy','scikit-learn','pandas','pyro-ppl', "jax[cuda12]",
-                      'leidenalg','python-igraph','networkx','matplotlib','seaborn','fa2-modified'],
+                      'leidenalg','python-igraph','networkx','matplotlib','seaborn','fa2-modified','zuko'],
     classifiers=[
         'Programming Language :: Python :: 3',
         'License :: OSI Approved :: MIT License',

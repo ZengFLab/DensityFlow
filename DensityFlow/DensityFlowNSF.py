@@ -13,7 +13,7 @@ from torch.distributions import constraints
 from torch.distributions.transforms import SoftmaxTransform
 
 from .utils.custom_mlp import MLP, Exp, ZeroBiasMLP, ZeroBiasMLP2, ZeroBiasMLP3
-from .utils.utils import CustomDataset, CustomDataset2, CustomDataset4, tensor_to_numpy, convert_to_tensor
+from .utils.utils import CustomDataset, CustomDataset2, CustomDataset3, tensor_to_numpy, convert_to_tensor
 
 from .dist.negbinomial import NegativeBinomial as MyNB
 from .dist.negbinomial import ZeroInflatedNegativeBinomial as MyZINB
@@ -61,8 +61,8 @@ def set_random_seed(seed):
     # Set seed for Pyro
     pyro.set_rng_seed(seed)
 
-class DensityFlow(nn.Module):
-    """DensityFlow model
+class DensityFlowNSF(nn.Module):
+    """DensityFlowNSF model
 
     Parameters
     ----------
@@ -73,8 +73,8 @@ class DensityFlow(nn.Module):
         Number of codebook items
 
     perturb_size: int
-        Number of perturbations 
-        
+        Number of perturbations
+    
     cov_size: int
         Number of covariates
 
@@ -97,8 +97,8 @@ class DensityFlow(nn.Module):
 
     Examples
     --------
-    >>> from DensityFlow import DensityFlow
-    >>> from DensityFlow.perturb import LabelMatrix
+    >>> from DensityFlowNSF import DensityFlowNSF
+    >>> from DensityFlowNSF.perturb import LabelMatrix
     >>> import scanpy as sc
     >>> adata = sc.read('dataset.h5ad')
     >>> adata.X = adata.layers['counts].copy()
@@ -108,7 +108,7 @@ class DensityFlow(nn.Module):
     >>> lb = LabelMatrix()
     >>> us = lb.fit_transform(adata_train.obs[pert_col], control_label=control_label)
     >>> ln = lb.labels_
-    >>> model = DensityFlow(input_dim = xs.shape[1],
+    >>> model = DensityFlowNSF(input_dim = xs.shape[1],
                             perturb_size=us.shape[1],
                             use_cuda=True)
     >>> model.fit(xs, us=us, use_jax=True)
@@ -122,6 +122,7 @@ class DensityFlow(nn.Module):
                  perturb_classes: int = 0,
                  cov_size: int = 0,
                  specific_mode: Literal['none','codebook','cell'] = 'codebook',
+                 transforms: int = 1,
                  z_dim: int = 50,
                  z_dist: Literal['normal','studentt','laplacian','cauchy','gumbel'] = 'studentt',
                  loss_func: Literal['negbinomial','poisson','multinomial','bernoulli'] = 'poisson',
@@ -129,6 +130,7 @@ class DensityFlow(nn.Module):
                  use_zeroinflate: bool = False,
                  hidden_layers: list = [512],
                  hidden_layer_activation: Literal['relu','softplus','leakyrelu','linear'] = 'relu',
+                 flow_hidden_layers: list = [128,128,128],
                  nn_dropout: float = 0.1,
                  post_layer_fct: list = ['layernorm'],
                  post_act_fct: list = None,
@@ -161,6 +163,8 @@ class DensityFlow(nn.Module):
         self.post_act_fct = post_act_fct
         self.hidden_layer_activation = hidden_layer_activation
         self.specific_mode = specific_mode
+        self.transforms = transforms
+        self.flow_hidden_layers = flow_hidden_layers
         
         self.codebook_weights = None
 
@@ -168,7 +172,7 @@ class DensityFlow(nn.Module):
         set_random_seed(seed)
         self.setup_networks()
         
-        print(f"🧬 DensityFlow Initialized:")
+        print(f"🧬 DensityFlowNSF Initialized:")
         print(f"   - Codebook size: {self.code_dim}")
         print(f"   - Latent Dimension: {self.latent_dim}")
         print(f"   - Gene Dimension: {self.input_dim}")
@@ -246,7 +250,7 @@ class DensityFlow(nn.Module):
                 use_cuda=self.use_cuda,
             )
 
-        self.encoder_zn = MLP(
+        '''self.encoder_zn = MLP(
             [self.input_dim] + hidden_sizes + [[latent_dim, latent_dim]],
             activation=activate_fct,
             output_activation=[None, Exp],
@@ -254,7 +258,7 @@ class DensityFlow(nn.Module):
             post_act_fct=post_act_fct,
             allow_broadcast=self.allow_broadcast,
             use_cuda=self.use_cuda,
-        )
+        )'''
 
         if self.cov_size>0:
             self.covariate_effect = ZeroBiasMLP2(
@@ -266,6 +270,7 @@ class DensityFlow(nn.Module):
                 allow_broadcast=self.allow_broadcast,
                 use_cuda=self.use_cuda,
             )
+            
         if self.perturb_size>0:
             if self.specific_mode=='none':
                 self.perturb_effect = ZeroBiasMLP3(
@@ -319,6 +324,9 @@ class DensityFlow(nn.Module):
                 use_cuda=self.use_cuda,
             )
         
+        self.encoder_zn = zuko.flows.NSF(features=self.latent_dim, context=self.input_dim, 
+                                         transforms=self.transforms, hidden_features=self.flow_hidden_layers)
+        
         if self.use_cuda:
             self.cuda()
 
@@ -371,7 +379,7 @@ class DensityFlow(nn.Module):
         return xs
 
     def model(self, xs, us=None, ts=None, cs=None):
-        pyro.module('DensityFlow', self)
+        pyro.module('DensityFlowNSF', self)
 
         eps = torch.finfo(xs.dtype).eps
         batch_size = xs.size(0)
@@ -469,8 +477,9 @@ class DensityFlow(nn.Module):
     def guide(self, xs, us=None, ts=None, cs=None):
         with pyro.plate('data'):
             #zn_loc, zn_scale = self.encoder_zn(xs)
-            zn_loc, zn_scale = self._get_basal_embedding(xs)
-            zns = pyro.sample('zn', dist.Normal(zn_loc, zn_scale).to_event(1))
+            #zn_loc, zn_scale = self._get_basal_embedding(xs)
+            #zns = pyro.sample('zn', dist.Normal(zn_loc, zn_scale).to_event(1))
+            zns = pyro.sample('zn', ZukoToPyro(self.encoder_zn(xs)))
 
             alpha = self.encoder_n(zns)
             ns = pyro.sample('n', dist.OneHotCategorical(logits=alpha))
@@ -525,7 +534,7 @@ class DensityFlow(nn.Module):
         return Z
     
     def _get_complete_embedding(self, xs, us, ts):
-        basal,_ = self._get_basal_embedding(xs)
+        basal = self._get_basal_embedding(xs)
         dzs = self._total_effects(basal, us, ts)
         return basal + dzs 
     
@@ -551,8 +560,8 @@ class DensityFlow(nn.Module):
         return Z
 
     def _get_basal_embedding(self, xs):           
-        loc,scale = self.encoder_zn(xs)
-        return loc,scale
+        loc = self.encoder_zn(xs).sample((10,)).mean(axis=0)
+        return loc
     
     def get_basal_embedding(self, 
                              xs, 
@@ -579,7 +588,7 @@ class DensityFlow(nn.Module):
         with tqdm(total=len(dataloader), disable=not show_progress, desc='', unit='batch') as pbar:
             for X_batch, _ in dataloader:
                 X_batch = X_batch.to(self.get_device())
-                zns,_ = self._get_basal_embedding(X_batch)
+                zns = self._get_basal_embedding(X_batch)
                 Z.append(tensor_to_numpy(zns))
                 pbar.update(1)
 
@@ -587,7 +596,7 @@ class DensityFlow(nn.Module):
         return Z
     
     def _code(self, xs):
-        zns,_ = self._get_basal_embedding(xs)
+        zns = self._get_basal_embedding(xs)
         alpha = self.encoder_n(zns)
         return alpha
     
@@ -685,13 +694,10 @@ class DensityFlow(nn.Module):
         return counts, log_mu
     
     def _cell_shift(self, zs, perturb, perturb_type):
-        #zns,_ = self.encoder_zn(xs)    
-        #zns,_ = self._get_basal_embedding(xs)   
         if self.specific_mode=='none':
             ms = self.perturb_effect([perturb, perturb_type])
         else:
             ms = self.perturb_effect([perturb, perturb_type, zs])
-            
         return ms 
 
     def get_cell_shift(self, 
@@ -799,7 +805,7 @@ class DensityFlow(nn.Module):
             verbose on or off
         '''
 
-        zs = convert_to_tensor(zs, device='cpu')
+        zs = convert_to_tensor(zs, device=self.get_device())
         
         if type(library_sizes) == list:
             library_sizes = np.array(library_sizes).reshape(-1,1)
@@ -853,7 +859,7 @@ class DensityFlow(nn.Module):
             use_jax: bool = False,
             show_progress=True):
         """
-        Train the DensityFlow model.
+        Train the DensityFlowNSF model.
 
         Parameters
         ----------
@@ -877,7 +883,7 @@ class DensityFlow(nn.Module):
             Parameter for optimization.
         use_jax: bool
             If toggled on, Jax will be used for speeding up. CAUTION: This will raise errors because of unknown reasons when it is called in
-            the Python script or Jupyter notebook. It is OK if it is used when runing DensityFlow in the shell command.
+            the Python script or Jupyter notebook. It is OK if it is used when runing DensityFlowNSF in the shell command.
         show_progress: bool
             verbose on or off
         """
@@ -972,7 +978,7 @@ class DensityFlow(nn.Module):
             with open(file_path, 'rb') as pickle_file:
                 model = pickle.load(pickle_file)
                 
-        print(f"🧬 DensityFlow Initialized:")
+        print(f"🧬 DensityFlowNSF Initialized:")
         print(f"   - Codebook size: {model.code_dim}")
         print(f"   - Latent Dimension: {model.latent_dim}")
         print(f"   - Gene Dimension: {model.input_dim}")
@@ -1013,7 +1019,7 @@ class DensityFlow(nn.Module):
     def load_model(cls, model_path: str):
         """Load pre-trained model"""
         checkpoint = torch.load(model_path)
-        model = DensityFlow(**checkpoint.get('model_config'))
+        model = DensityFlowNSF(**checkpoint.get('model_config'))
         
         checkpoint = torch.load(model_path, map_location=model.get_device())
         model.load_state_dict(checkpoint['model_state_dict'])
@@ -1022,12 +1028,12 @@ class DensityFlow(nn.Module):
 
         
 EXAMPLE_RUN = (
-    "example run: DensityFlow --help"
+    "example run: DensityFlowNSF --help"
 )
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="DensityFlow\n{}".format(EXAMPLE_RUN))
+        description="DensityFlowNSF\n{}".format(EXAMPLE_RUN))
 
     parser.add_argument(
         "--cuda", action="store_true", help="use GPU(s) to speed up training"
@@ -1214,7 +1220,7 @@ def main():
     perturb_size = 0 if us is None else us.shape[1]
 
     ###########################################
-    df = DensityFlow(
+    df = DensityFlowNSF(
         input_dim=input_dim,
         perturb_size=perturb_size,
         dispersion=args.dispersion,
@@ -1245,9 +1251,9 @@ def main():
 
     if args.save_model is not None:
         if args.save_model.endswith('gz'):
-            DensityFlow.save_model(df, args.save_model, compression=True)
+            DensityFlowNSF.save_model(df, args.save_model, compression=True)
         else:
-            DensityFlow.save_model(df, args.save_model)
+            DensityFlowNSF.save_model(df, args.save_model)
     
 
 
