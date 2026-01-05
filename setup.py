@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name='DensityFlow',
-    version='1.1.1',
+    version='1.1.3',
     description='Generative additive model for single cell perturbation',
     long_description=long_description,
     long_description_content_type="text/markdown",

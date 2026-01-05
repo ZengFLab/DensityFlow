@@ -529,6 +529,7 @@ class DensityFlow(nn.Module):
         dzs = self._total_effects(basal, us, ts)
         return basal + dzs 
     
+    @torch.no_grad()
     def get_complete_embedding(self, xs, us, ts, batch_size:int=1024, show_progress=True):
         xs = self.preprocess(xs)
         xs = convert_to_tensor(xs, device='cpu')
@@ -550,10 +551,11 @@ class DensityFlow(nn.Module):
         Z = np.concatenate(Z)
         return Z
 
-    def _get_basal_embedding(self, xs):           
+    def _get_basal_embedding(self, xs):
         loc,scale = self.encoder_zn(xs)
         return loc,scale
     
+    @torch.no_grad()
     def get_basal_embedding(self, 
                              xs, 
                              batch_size: int = 1024,
@@ -591,6 +593,7 @@ class DensityFlow(nn.Module):
         alpha = self.encoder_n(zns)
         return alpha
     
+    @torch.no_grad()
     def code(self, xs, batch_size=1024, show_progress=True):
         xs = self.preprocess(xs)
         xs = convert_to_tensor(xs, device='cpu')
@@ -613,6 +616,7 @@ class DensityFlow(nn.Module):
         alpha = self.softmax(alpha)
         return alpha
     
+    @torch.no_grad()
     def soft_assignments(self, xs, batch_size=1024, show_progress=True):
         """
         Map cells to metacells and return the probabilistic values of metacell assignments
@@ -639,6 +643,7 @@ class DensityFlow(nn.Module):
         ns = torch.zeros_like(alpha).scatter_(1, ind, 1.0)
         return ns
     
+    @torch.no_grad()
     def hard_assignments(self, xs, batch_size=1024, show_progress=True):
         """
         Map cells to metacells and return the assigned metacell identities.
@@ -659,6 +664,7 @@ class DensityFlow(nn.Module):
         A = np.concatenate(A)
         return A
     
+    @torch.no_grad()
     def predict(self, xs, perturb, perturb_type, library_sizes=None, show_progress=True):
         perturbs_reference = np.array(perturbs_reference)
         perturbs_predict = np.unique(perturbs_predict)
@@ -694,6 +700,7 @@ class DensityFlow(nn.Module):
             
         return ms 
 
+    @torch.no_grad()
     def get_cell_shift(self, 
                              xs, 
                              perturb_us,
@@ -749,6 +756,7 @@ class DensityFlow(nn.Module):
     def _log_mu(self, zs):
         return self.decoder_log_mu(zs)
     
+    @torch.no_grad()
     def get_log_mu(self, zs, batch_size: int = 1024, show_progress=True):
         """
         Return cells' changes in the feature space induced by specific perturbation of a factor
@@ -780,6 +788,7 @@ class DensityFlow(nn.Module):
             counts = theta * library_size
         return counts
     
+    @torch.no_grad()
     def get_counts(self, zs, library_sizes, batch_size: int = 1024, show_progress=True):
         '''
         Generate observational profiles from latent states.
@@ -823,6 +832,7 @@ class DensityFlow(nn.Module):
         E = np.concatenate(E)
         return E
     
+    @torch.no_grad()
     def preprocess(self, xs, threshold=0):
         if self.loss_func == 'bernoulli':
             ad = sc.AnnData(xs)
