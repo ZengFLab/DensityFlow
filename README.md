@@ -17,6 +17,10 @@ pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu12
 pip3 install DensityFlow
 ```
 
+## Tutorial
+More examples are availablet at DensityFlow's [reprodcibility](https://github.com/ZengFLab/DensityFlow_reproducibility) repository. 
+
+
 ## Example
 Dataset used in this example is obtained from [scPerturb](https://zenodo.org/records/13350497)
 
